@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Todo List App</title>
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+</head>
+<body>
+  <div class="container my-5">
+    <h2 class="mb-4">Todo List</h2>
+
+    <!-- Add Todo Form -->
+    <form id="addTodoForm" class="mb-4">
+      <div class="row g-2">
+        <div class="col-md-6">
+          <input type="text" id="todoTitle" class="form-control" placeholder="Enter todo title" required />
+        </div>
+        <div class="col-md-4">
+          <input type="date" id="todoDate" class="form-control" required />
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">Add Todo</button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Search & Filter -->
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <input type="text" id="searchInput" class="form-control" placeholder="Search by task name" />
+      </div>
+      <div class="col-md-3">
+        <input type="date" id="fromDate" class="form-control" />
+      </div>
+      <div class="col-md-3">
+        <input type="date" id="toDate" class="form-control" />
+      </div>
+      <div class="col-md-2">
+        <button id="filterBtn" class="btn btn-secondary w-100">Apply Filters</button>
+      </div>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loading" class="alert alert-info d-none">Loading...</div>
+
+    <!-- Error message -->
+    <div id="error" class="alert alert-danger d-none"></div>
+
+    <!-- Todo List -->
+    <ul id="todoList" class="list-group"></ul>
+
+    <!-- Pagination -->
+    <nav aria-label="Todo pagination" class="mt-3">
+      <ul id="pagination" class="pagination"></ul>
+    </nav>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    const apiUrl = 'https://dummyjson.com/todos';
+    const todosPerPage = 5;
+    let todos = [];
+    let currentPage = 1;
+    let filteredTodos = [];
+
+    const todoListEl = document.getElementById('todoList');
+    const paginationEl = document.getElementById('pagination');
+    const loadingEl = document.getElementById('loading');
+    const errorEl = document.getElementById('error');
+
+    async function fetchTodos() {
+      showLoading();
+      hideError();
+      try {
+        const res = await axios.get(apiUrl);
+        todos = res.data.todos.map(todo => ({
+          ...todo,
+          createdDate: new Date() // Simulating created date
+        }));
+        filteredTodos = [...todos];
+        renderTodos();
+        renderPagination();
+      } catch (err) {
+        showError('Failed to fetch todos. Please try again.');
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function renderTodos() {
+      const start = (currentPage - 1) * todosPerPage;
+      const end = start + todosPerPage;
+      const paginated = filteredTodos.slice(start, end);
+
+      todoListEl.innerHTML = '';
+      if (paginated.length === 0) {
+        todoListEl.innerHTML = '<li class="list-group-item">No todos found.</li>';
+        return;
+      }
+
+      paginated.forEach(todo => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+          <span>${todo.todo}</span>
+          <small class="text-muted">${todo.createdDate.toDateString()}</small>
+        `;
+        todoListEl.appendChild(li);
+      });
+    }
+
+    function renderPagination() {
+      const pageCount = Math.ceil(filteredTodos.length / todosPerPage);
+      paginationEl.innerHTML = '';
+
+      // ...existing code...
+       for (let i = 1; i <= pageCount; i++) {
+              const li = document.createElement('li');
+        li.className = `page-item${i === currentPage ? ' active' : ''}`;
+         li.innerHTML = `<a class="page-link" href="#">${i}</a>`;
+          li.addEventListener('click', (e) => {
+    e.preventDefault();
+    currentPage = i;
+    renderTodos();
+    renderPagination();
+  });
+  paginationEl.appendChild(li);
+}
+// ...existing code...
+    }
+
+    document.getElementById('addTodoForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showLoading();
+      hideError();
+
+      const title = document.getElementById('todoTitle').value.trim();
+      const date = new Date(document.getElementById('todoDate').value);
+
+      if (!title || isNaN(date)) {
+        showError('Please provide valid title and date.');
+        hideLoading();
+        return;
+      }
+
+      try {
+        // Dummy post, won't really save on the dummyjson backend
+        const res = await axios.post(apiUrl + '/add', {
+          todo: title,
+          completed: false,
+          userId: 1
+        });
+
+        const newTodo = {
+          ...res.data,
+          createdDate: date
+        };
+
+        todos.unshift(newTodo);
+        filteredTodos = [...todos];
+        currentPage = 1;
+        renderTodos();
+        renderPagination();
+
+        // Reset form
+        document.getElementById('addTodoForm').reset();
+      } catch (err) {
+        showError('Failed to add todo.');
+      } finally {
+        hideLoading();
+      }
+    });
+
+    document.getElementById('searchInput').addEventListener('input', () => {
+      applyFilters();
+    });
+
+    document.getElementById('filterBtn').addEventListener('click', () => {
+      applyFilters();
+    });
+
+    function applyFilters() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const fromDate = new Date(document.getElementById('fromDate').value);
+      const toDate = new Date(document.getElementById('toDate').value);
+
+      filteredTodos = todos.filter(todo => {
+        const matchesSearch = todo.todo.toLowerCase().includes(search);
+        const created = todo.createdDate;
+
+        let matchesDate = true;
+        if (!isNaN(fromDate) && created < fromDate) {
+          matchesDate = false;
+        }
+        if (!isNaN(toDate) && created > toDate) {
+          matchesDate = false;
+        }
+
+        return matchesSearch && matchesDate;
+      });
+
+      currentPage = 1;
+      renderTodos();
+      renderPagination();
+    }
+
+    function showLoading() {
+      loadingEl.classList.remove('d-none');
+    }
+
+    function hideLoading() {
+      loadingEl.classList.add('d-none');
+    }
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove('d-none');
+    }
+
+    function hideError() {
+      errorEl.classList.add('d-none');
+    }
+
+    fetchTodos();
+  </script>
+</body>
+</html>
